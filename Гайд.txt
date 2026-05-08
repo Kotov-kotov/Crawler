@@ -1,0 +1,3 @@
+Windows PowerShell
+1) cd D:\Python\Crawler (расположение файлов проекта)
+2) py main.py
