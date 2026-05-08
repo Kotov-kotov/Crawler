@@ -1,46 +1,50 @@
 @echo off
 chcp 65001 >nul
+title Установка веб-краулера
+
 echo ========================================
 echo УСТАНОВКА ВЕБ-КРАУЛЕРА
 echo ========================================
 echo.
 
-python --version >nul 2>&1
+:: Проверка Python (без указания конкретного пути)
+echo Проверка Python...
+python --version 2>nul
 if errorlevel 1 (
-    echo [ОШИБКА] Python не найден!
-    echo Скачайте Python с python.org
+    echo [ОШИБКА] Python не найден в PATH
+    echo.
+    echo Пожалуйста, установите Python и отметьте "Add Python to PATH"
+    echo.
     pause
     exit /b 1
 )
 
 echo [OK] Python найден
 python --version
-
 echo.
-echo Создание виртуального окружения...
-if exist venv (
-    echo Виртуальное окружение уже существует
-) else (
-    python -m venv venv
-    echo [OK] Виртуальное окружение создано
-)
 
-echo.
-echo Активация и установка зависимостей...
-call venv\Scripts\activate.bat
+:: Обновление pip
+echo Обновление pip...
 python -m pip install --upgrade pip
-pip install -r requirements.txt
-
 echo.
-echo Создание папок...
+
+:: Установка библиотек
+echo Установка библиотек...
+python -m pip install requests
+python -m pip install beautifulsoup4
+python -m pip install pandas
+python -m pip install networkx
+python -m pip install plotly
+python -m pip install urllib3
+echo.
+
+:: Создание папок
 mkdir data 2>nul
 mkdir graphs 2>nul
 
-echo.
 echo ========================================
-echo УСТАНОВКА ЗАВЕРШЕНА!
+echo УСТАНОВКА ЗАВЕРШЕНА
 echo ========================================
 echo.
-echo Запустите проект: run.bat
-echo.
+echo Запустите run.bat
 pause
