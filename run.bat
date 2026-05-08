@@ -1,14 +1,17 @@
 @echo off
 chcp 65001 >nul
-echo Запуск веб-краулера...
+title Запуск веб-краулера
+
+echo ========================================
+echo ЗАПУСК ВЕБ-КРАУЛЕРА
+echo ========================================
 echo.
 
-if exist venv\Scripts\activate.bat (
-    call venv\Scripts\activate.bat
-)
-
+:: Просто "python" - без путей!
 python main.py
 
 echo.
-echo Нажмите любую клавишу для выхода...
-pause >nul
+echo ========================================
+echo РАБОТА ЗАВЕРШЕНА
+echo ========================================
+pause
