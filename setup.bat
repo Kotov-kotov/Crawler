@@ -7,19 +7,14 @@ echo УСТАНОВКА ВЕБ-КРАУЛЕРА
 echo ========================================
 echo.
 
-:: Проверка Python (без указания конкретного пути)
+:: Проверка Python
 echo Проверка Python...
 python --version 2>nul
 if errorlevel 1 (
-    echo [ОШИБКА] Python не найден в PATH
-    echo.
-    echo Пожалуйста, установите Python и отметьте "Add Python to PATH"
-    echo.
+    echo [ОШИБКА] Python не найден
     pause
     exit /b 1
 )
-
-echo [OK] Python найден
 python --version
 echo.
 
@@ -28,14 +23,27 @@ echo Обновление pip...
 python -m pip install --upgrade pip
 echo.
 
-:: Установка библиотек
-echo Установка библиотек...
-python -m pip install requests
-python -m pip install beautifulsoup4
-python -m pip install pandas
-python -m pip install networkx
-python -m pip install plotly
-python -m pip install urllib3
+:: Удаление старых версий
+echo Удаление старых версий numpy и pandas...
+python -m pip uninstall numpy pandas -y 2>nul
+echo.
+
+:: Установка совместимых версий
+echo Установка numpy...
+python -m pip install numpy==1.24.3
+
+echo Установка pandas...
+python -m pip install pandas==2.0.3
+
+echo Установка остальных библиотек...
+python -m pip install requests beautifulsoup4 networkx plotly urllib3
+echo.
+
+:: Проверка
+echo Проверка установки...
+python -c "import numpy; print('  numpy:', numpy.__version__)" 2>nul
+python -c "import pandas; print('  pandas:', pandas.__version__)" 2>nul
+python -c "import requests; print('  requests: OK')" 2>nul
 echo.
 
 :: Создание папок
@@ -46,5 +54,5 @@ echo ========================================
 echo УСТАНОВКА ЗАВЕРШЕНА
 echo ========================================
 echo.
-echo Запустите run.bat
+echo Запустите: run.bat
 pause
