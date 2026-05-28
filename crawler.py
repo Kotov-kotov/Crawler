@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class WebCrawler:
     def __init__(self, start_url: str, max_pages: int = 100, delay: float = 1.0,
-                 same_domain_only: bool = True):
+                 same_domain_only: bool = True, timeout: int = 10, max_depth: int = 20):
         """
         Инициализация веб-краулера
 
@@ -24,17 +24,22 @@ class WebCrawler:
             max_pages: Максимальное количество страниц для проверки
             delay: Задержка между запросами в секундах
             same_domain_only: Ограничиваться ли только тем же доменом
+            timeout: Таймаут ожидания ответа от сервера (секунды)
+            max_depth: Максимальная глубина обхода
         """
         self.start_url = start_url
         self.base_domain = urlparse(start_url).netloc
         self.max_pages = max_pages
         self.delay = delay
         self.same_domain_only = same_domain_only
+        self.timeout = timeout
+        self.max_depth = max_depth
 
         # Множества для отслеживания посещенных и запланированных URL
-        self.visited_urls: Set[str] = set()  # Уже обработанные URL
-        self.queued_urls: Set[str] = set()  # URL уже в очереди
-        self.queue = deque()  # Очередь для обхода
+        self.visited_urls: Set[str] = set()
+        self.queued_urls: Set[str] = set()
+        self.queue = deque()
+        self.limit_warning_shown = False
 
         self.links_data: List[Dict] = []
         self.session = requests.Session()
@@ -117,9 +122,9 @@ class WebCrawler:
         return True, "OK"
 
     def get_status_code(self, url: str) -> Tuple[int, str]:
-        """Получение статуса URL"""
+        """Получение статуса URL с учётом таймаута"""
         try:
-            response = self.session.get(url, timeout=10, allow_redirects=True)
+            response = self.session.get(url, timeout=self.timeout, allow_redirects=True)
             return response.status_code, 'success'
         except requests.exceptions.Timeout:
             return 408, 'timeout'
@@ -157,7 +162,7 @@ class WebCrawler:
         return links
 
     def calculate_depth(self, url: str) -> int:
-        """Расчет глубины ссылки от start_url"""
+        """Расчет глубины ссылки от start_url с учётом max_depth"""
         if url == self.start_url:
             return 0
 
@@ -177,10 +182,10 @@ class WebCrawler:
         current_segments = len([s for s in current_path.split('/') if s])
 
         depth = max(0, current_segments - start_segments)
-        return min(depth, 20)  # Ограничиваем максимальную глубину
+        return min(depth, self.max_depth)  # Ограничиваем максимальную глубину
 
-    def add_to_queue(self, url: str):
-        """Безопасное добавление URL в очередь"""
+    def add_to_queue(self, url: str) -> bool:
+        """Безопасное добавление URL в очередь (с одним предупреждением)"""
         normalized_url = self.normalize_url(url)
 
         # Проверка на дубликаты
@@ -192,9 +197,13 @@ class WebCrawler:
             logger.debug(f"URL уже в очереди: {normalized_url}")
             return False
 
-        # Проверка лимитов
-        if len(self.visited_urls) + len(self.queued_urls) >= self.max_pages * 2:
-            logger.warning("Достигнут лимит URL в очереди")
+        # Проверка лимитов (с одним предупреждением)
+        current_total = len(self.visited_urls) + len(self.queued_urls)
+        if current_total >= self.max_pages * 2:
+            if not self.limit_warning_shown:
+                logger.warning(f"Достигнут лимит URL в очереди (максимум {self.max_pages * 2} URL). "
+                              f"Новые ссылки добавляться не будут.")
+                self.limit_warning_shown = True
             return False
 
         # Добавляем в очередь
@@ -233,14 +242,13 @@ class WebCrawler:
             # Попытки загрузки с повторными попытками
             for attempt in range(max_retries):
                 try:
-                    response = self.session.get(url, timeout=10, allow_redirects=True)
+                    response = self.session.get(url, timeout=self.timeout, allow_redirects=True)
                     status_code = response.status_code
 
                     # Если страница загружена успешно, извлекаем ссылки
                     if status_code == 200:
                         links = self.extract_links(url, response.text)
-                        logger.info(
-                            f"Найдено ссылок: {len(links)} (уникальных: {len([l for l in links if l not in self.visited_urls and l not in self.queued_urls])})")
+                        logger.info(f"Найдено ссылок: {len(links)}")
 
                         # Добавляем новые ссылки в очередь
                         new_links_count = 0
@@ -293,7 +301,7 @@ class WebCrawler:
             # Сохраняем промежуточные результаты каждые 10 страниц
             if len(self.links_data) % 10 == 0:
                 self.save_to_csv('data/links_data_temp.csv')
-                logger.info(f"💾 Сохранен промежуточный результат ({len(self.links_data)} страниц)")
+                logger.info(f"Сохранен промежуточный результат ({len(self.links_data)} страниц)")
 
             # Вежливый краулинг
             time.sleep(self.delay)
@@ -302,10 +310,10 @@ class WebCrawler:
         logger.info(f"\n{'=' * 60}")
         logger.info(f"КРАУЛИНГ ЗАВЕРШЕН")
         logger.info(f"{'=' * 60}")
-        logger.info(f"✅ Обработано страниц: {len(self.links_data)}")
-        logger.info(f"📊 Уникальных URL в очереди: {len(self.visited_urls)}")
-        logger.info(f"🔗 Всего найдено ссылок: {sum(item['links_found'] for item in self.links_data)}")
-        logger.info(f"⏭️  Осталось в очереди: {len(self.queue)}")
+        logger.info(f"Обработано страниц: {len(self.links_data)}")
+        logger.info(f"Уникальных URL в очереди: {len(self.visited_urls)}")
+        logger.info(f"Всего найдено ссылок: {sum(item['links_found'] for item in self.links_data)}")
+        logger.info(f"Осталось в очереди: {len(self.queue)}")
 
     def save_to_csv(self, filename: str = 'data/links_data.csv'):
         """Сохранение данных в CSV"""
@@ -319,7 +327,7 @@ class WebCrawler:
         df = df.sort_values(['depth', 'status_code'], ascending=[True, True])
 
         df.to_csv(filename, index=False, encoding='utf-8-sig')
-        logger.info(f"💾 Данные сохранены в {filename} (всего записей: {len(df)})")
+        logger.info(f"Данные сохранены в {filename} (всего записей: {len(df)})")
 
         # Дополнительная статистика
         stats_file = filename.replace('.csv', '_stats.txt')
